@@ -1,0 +1,199 @@
+﻿<!--
+        CIS 463 Data Visualization Exercise
+-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Adventure Works SalesPerson Dashboard</title>
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js"></script>
+    <script type="text/javascript">
+    google.load('visualization', '1', { packages: ['corechart', 'table'] });
+    </script>
+    <script type="text/javascript">
+
+	// this gets it all started
+	google.setOnLoadCallback(drawWebPage);
+
+
+        // query connection string to Google spreadsheet
+	var queryConnectionString =  "https://docs.google.com/spreadsheets/d/10Xwod9RGBsPGIZjkWYn4EIjfMFB3U8iD6fH5jARg3-k/edit?usp=sharing";
+
+	// charts
+	var chart1;
+	var chart2;
+	var chart3;
+
+	// data tables (contain results of queries)
+	var dataTable1;
+	var dataTable2;
+	var dataTable3;
+
+	// map
+	var map;
+
+	function drawWebPage() {
+
+		sendQuery();
+
+	}
+
+	function sendQuery(){
+		// query for salespeople
+		var query = new google.visualization.Query(queryConnectionString);
+		query.setQuery("SELECT A, B, C limit 14");
+		query.send(onQuery1Response);
+
+
+	}
+
+	function onQuery1Response(response) {
+	  // error-handling code
+		if (response.isError()) {
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+// get the data table from the query response
+		dataTable1 = response.getDataTable();
+
+		// make a chart
+		chart1 = new google.visualization.Table(document.getElementById('container1'));
+		chart1.draw(dataTable1);
+		// specify the event handler method for user selection
+		google.visualization.events.addListener(chart1, 'select', selectHandler);
+
+	}
+
+ var spID
+	function selectHandler(e){
+		// get the sales person's id. Based on the user selection (item), and the
+		// specific column where the sales person's id is found
+		var selection = chart1.getSelection();
+		var item = selection[0]; 
+		spID = dataTable1.getValue(item.row, 1); 
+		
+		// query for salesperson's stores
+		var query = new google.visualization.Query(queryConnectionString);
+		query.setQuery("SELECT  H, count(E) WHERE E = " + spID + " group by H");
+		query.send(onQuery2Response);	
+		
+	}
+	
+	function onQuery2Response(response) {
+	  // error-handling code
+		if (response.isError()) {
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+// get the data table from the query response
+		dataTable2 = response.getDataTable();
+
+		// make a chart
+		chart2 = new google.visualization.PieChart(document.getElementById('container2'));
+		var options = {title: "Nbr Stores by State/Province", pieSliceText: "value", is3D: true};
+		
+		chart2.draw(dataTable2,options);
+		// specify the event handler method for user selection
+		google.visualization.events.addListener(chart2, 'select', selectHandler2);
+
+	}
+	
+	function selectHandler2(e){
+		// get the sales person's id. Based on the user selection (item), and the
+		// specific column where the sales person's id is found
+	
+		var selection = chart2.getSelection();
+		var item = selection[0]; 
+		var state = " "
+		state = dataTable2.getValue(item.row, 0); 
+		
+		// query for salesperson's stores
+		var query = new google.visualization.Query(queryConnectionString);
+		query.setQuery("SELECT  F, G, H, I WHERE E = " + spID + " and H = '" + state + "'");
+		query.send(onQuery3Response);	
+		
+	}
+	
+	function onQuery3Response(response) {
+	  // error-handling code
+		if (response.isError()) {
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+// get the data table from the query response
+		dataTable3 = response.getDataTable();
+
+		// make a chart
+		chart3 = new google.visualization.Table(document.getElementById('container3'));
+		chart3.draw(dataTable3);
+		// specify the event handler method for user selection
+		//google.visualization.events.addListener(chart3, 'select', selectHandler2);
+		
+		// create a map
+	    map = new google.maps.Map(document.getElementById('container4'), {mapTypeId: google.maps.MapTypeId.ROADMAP,zoom: 6}); 
+		// create a LatLng object (latitude and longitude values) 
+		var latlng = new google.maps.LatLng(38.5, -78.9);        
+		// center the map at the lat/lng location (centered at Harrisonburg)      
+		map.setCenter(latlng);
+		
+		  // get the distinct cities  
+		  // (if more than one store is in a city, only want one marker for the city)  
+		  var cities = dataTable3.getDistinctValues(1);  
+		  var stateProvince = dataTable3.getValue(0, 2);
+		  // all rows will have same state 
+		  
+		  // geocode each city  
+		  var geocoder = new google.maps.Geocoder(); 
+		  for (var i = 0; i< cities.length; i++) {  
+		  var address = cities[i] + "," + stateProvince; 
+		  geocoder.geocode({ 'address': address }, onGeocodeResponse);
+		  }
+		
+		}
+	function onGeocodeResponse(response, status) {
+	// the Geocode service has sent its response. We can now use it for the map
+	if (status == google.maps.GeocoderStatus.OK) {
+	// center the map at the location returned from the geocoding service
+	map.setCenter(response[0].geometry.location);
+	
+	// set up the store names for the city to display in marker tool tip
+	var storesInCity = "\n";
+	for (var i = 0; i < dataTable3.getNumberOfRows(); i++) {
+	if (response[0].address_components[0].long_name == dataTable3.getValue(i,1))
+	storesInCity += "\n" + dataTable3.getValue(i,0);
+	}
+	
+	var marker = new google.maps.Marker({
+	map: map,
+	position: response[0].geometry.location,
+	title: response[0].address_components[0].long_name + storesInCity});
+	}
+	else alert("error in geocoding: " + status);	// typically this will mean exceed query limit
+	
+	
+	
+	}
+	
+	
+		
+
+    </script>
+</head>
+<body style="font-family: Arial; border: 0 none;">
+    
+    <div id="container1" style="position:absolute;top:40px; left:20px; width: 350px; height: 300px;">
+    </div>
+
+    <div id="container2" style="position:absolute;top:0px; left:400px; width: 800px; height: 500px;">
+    </div>
+
+    <div id="container3" style="position:absolute;top:400px; left:20px; width: 600px; height: 400px;">
+    </div>
+
+    <div id="container4" style="position:absolute;top:420px; left:600px; width: 700px; height: 500px;">
+    </div>
+	
+	</body>
+</html>
+​ 

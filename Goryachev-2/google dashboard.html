@@ -1,0 +1,248 @@
+﻿<!--
+        CIS 463 Data Visualization Exercise
+-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Adventure Works SalesPerson Dashboard</title>
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js"></script>
+	 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.load('visualization', '1', { packages: ['table', 'corechart'] });
+		google.charts.load('current', { packages: ['orgchart'] });
+		google.charts.load('current', { packages: ['corechart'] });
+		google.charts.load('current', { packages: ['treemap'] });
+		
+    </script>
+    <script type="text/javascript">
+
+	
+	// this gets it all started
+	google.setOnLoadCallback(drawWebPage);
+
+
+	// query connection string to Google spreadsheet
+	var queryConnectionString =  "https://docs.google.com/spreadsheets/d/1_2HLiOL5huhCsUFKwr5XStMHUyeqXHFpoa7Qmoa_IDg/edit?usp=sharing";
+
+	// charts
+	var chart1;
+	var chart2;
+	var chart3;
+
+	// data tables (contain results of queries)
+	var dataTable1;
+	var dataTable2;
+	var dataTable3;
+	var dataTable4;
+
+	//Sales Territory Region ID 
+	var strID;
+	
+	var ID; 
+
+	function drawWebPage() {
+		sendQuery();
+		sendQuery2();
+	}
+
+	function sendQuery()
+	{
+		// query for OrgChart
+		var query = new google.visualization.Query(queryConnectionString);
+		query.setQuery("SELECT A, B, C limit 17"); 
+		query.send(onQuery1Response);
+	}
+	
+	function sendQuery2()
+	{
+		// query for TreeMap
+		var query2 = new google.visualization.Query(queryConnectionString);
+		query2.setQuery("SELECT E, F, G, H limit 20"); 
+		query2.send(onQuery2Response);
+	}
+	
+
+	// Creating the OrgChart
+	function onQuery1Response(response) 
+	{
+	  // error-handling code
+		if (response.isError()) 
+		{
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+		
+		// get the data table from the query response
+		dataTable1 = response.getDataTable();
+		
+		// make a chart
+		chart1 = new google.visualization.OrgChart(document.getElementById('container1'));
+		chart1.draw(dataTable1);
+		
+	}
+		
+		// Creating the TreeMap
+		function onQuery2Response(response) 
+	{
+	  // error-handling code
+		if (response.isError()) 
+		{
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+		
+		// get the data table from the query response
+		dataTable2 = response.getDataTable();
+		
+		// make a chart
+		chart2 = new google.visualization.TreeMap(document.getElementById('container2'));
+		//method of the number class that will return currency format
+		const formatter = new Intl.NumberFormat('en-US', {
+  			 style: 'currency',
+ 			 currency: 'USD',
+			 minimumFractionDigits: 2
+		});
+		var options = {title: "Sales Territory TreeMap",
+		maxDepth: 3,
+		minColor: '#009688',
+        midColor: '#f7f7f7',
+        maxColor: '#ee8100',
+		showScale: true,
+		generateTooltip: showFullTooltip
+  };
+		chart2.draw(dataTable2, options);
+		google.visualization.events.addListener(chart2, 'select', selectHandler);
+		google.visualization.events.addListener(chart2, 'select', selectHandler2);
+		function showFullTooltip(row) {
+			return  '<div style="background:#fd9; padding:10px; border-style:solid">' +
+					'<span style="font-family:Courier"><b>' + 'Territory: ' + dataTable2.getValue(row, 0) + '<br>' + 'Total Orders: ' + dataTable2.getValue(row, 2) + '<br>' +
+					'Total Revenue: ' + formatter.format(dataTable2.getValue(row, 3)) + ' </div>' + '</span>';
+			}
+  }
+  
+	//Used for BubbleChart
+	function selectHandler(e){
+		// get the sales person's id. Based on the user selection (item), and the
+		// specific column where the sales person's id is found
+		var selection = chart2.getSelection();
+		var item = selection[0]; 
+		strID = dataTable2.getValue(item.row, 0); 
+		//stupid(territory);
+
+		highlighting(strID);
+		
+		// query for Product Category Orders and Revenue by Year for selected territory 
+		var query = new google.visualization.Query(queryConnectionString);
+		query.setQuery("SELECT  K, M, N, L, O WHERE J like " +  "'%" + strID + "%'");
+		query.send(onQuery3Response);	
+		
+		
+	}
+		// Creating the BubbleChart
+		function onQuery3Response(response) {
+	  // error-handling code
+		if (response.isError()) {
+		  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+		  return;
+		}
+		// get the data table from the query response
+		dataTable3 = response.getDataTable();
+
+		// make a chart
+		chart3 = new google.visualization.BubbleChart(document.getElementById('container4'));
+		var selection = chart2.getSelection();
+		var item = selection[0]; 
+		var title = dataTable2.getValue(item.row, 0)
+		var options = {
+        title: 'Product Category Orders and Revenue by Year for ' + title,
+		hAxis: {title: 'Qty Ordered'},
+        vAxis: {title: 'Sales Revenue'},
+        bubble: {textStyle: {fontSize: 11}}
+      };
+		
+		chart3.draw(dataTable3,options);
+
+	}
+		
+	 //Selecting the territory from the treeMap, populating the Array
+	function highlighting(strID){
+		chart1.setSelection([]);
+		var peopleInTerritory = []; 
+		
+			for(var i = 0; i <= dataTable1.getNumberOfRows() - 1; i++){
+			 var x = dataTable1.getValue(i,2);
+			 
+			 if(x.includes(strID)){
+				peopleInTerritory.push({ row: i, column: null });
+			 }
+				
+			}
+			chart1.setSelection(peopleInTerritory);
+			
+	}
+	//Used for PieChart 
+	function selectHandler2(e){
+		
+			var selection = chart2.getSelection();
+			var item1 = selection[0]; 
+			var id;
+			id = dataTable2.getValue(item1.row, 3); 
+
+			var item2 = selection[0]; 
+			var salesTerriotyRegionName;
+			salesTerriotyRegionName = dataTable2.getValue(item2.row, 0);
+
+			var query = new google.visualization.Query(queryConnectionString);
+			query.setQuery("SELECT  K, sum(N) WHERE N = " + id + " OR J like " + "'%" + salesTerriotyRegionName + "%'" + " group by K");
+			query.send(onQuery4Response);
+		}
+		
+		//Creating the PieChart 
+		function onQuery4Response(response) 
+		{
+			// error-handling code
+			if (response.isError()) 
+			{
+			  alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+			  return;
+			}
+			
+			// get the data table from the query response
+			dataTable4 = response.getDataTable();
+
+			// make a chart
+			chart4 = new google.visualization.PieChart(document.getElementById('container3'));
+			var selection = chart2.getSelection();
+			var item = selection[0]; 
+			var salesRegionID;
+			salesRegionID = dataTable2.getValue(item.row, 0); 
+
+			var options = {title: "Market Shares in " + salesRegionID, pieStartAngle: 100,}
+			
+			chart4.draw(dataTable4, options);
+
+		}
+
+
+
+    </script>
+</head>
+<body style="font-family: Arial; border: 0 none;">
+	<p><font size="2"><b>SalesPerson OrgChart</b></font></p>
+    <div id="container1" style="position:absolute;top:40px; left:20px; width: 500px; height: 300px;">
+    </div>
+
+    <div id="container2" style="position:absolute;top:40px; left:1000px; width: 800px; height: 600px;">
+    </div>
+
+    <div id="container3" style="position:absolute;top:650px; left:20px; width: 800px; height: 600px;">
+    </div>
+
+    <div id="container4" style="position:absolute;top:650px; left:1000px; width: 700px; height: 550px;">
+    </div>
+	
+	</body>
+</html>
+​ 
